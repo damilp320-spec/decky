@@ -1,0 +1,99 @@
+name: Обновить зеркало
+
+on:
+  schedule:
+    # Каждые 6 часов. Крон работает только в ветке по умолчанию (main).
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/mirror.yml"
+
+permissions:
+  contents: write # заливка zip-архивов в релиз
+  pages: write
+  id-token: write
+
+concurrency:
+  group: decky-mirror
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: artifacts
+  KEEP_VERSIONS: "1"
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Кеш скачанных архивов
+        uses: actions/cache@v4
+        with:
+          path: .cache/artifacts
+          key: decky-artifacts-${{ github.run_id }}
+          restore-keys: decky-artifacts-
+
+      - name: Вычислить адреса зеркала
+        run: |
+          owner="$(printf '%s' "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          if [ "$repo" = "$owner.github.io" ]; then
+            base="https://$owner.github.io"
+          else
+            base="https://$owner.github.io/$repo"
+          fi
+          echo "PAGES_BASE=$base" >> "$GITHUB_ENV"
+          echo "RELEASE_BASE=https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG" >> "$GITHUB_ENV"
+
+      - name: Синхронизировать с официальным стором
+        run: python3 scripts/sync.py
+
+      - name: Залить архивы в релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" \
+              --title "Архивы плагинов" \
+              --notes "Зеркало zip-архивов плагинов Decky. Имя файла — SHA-256 архива. Заполняется автоматически."
+          existing="$(gh release view "$RELEASE_TAG" --json assets -q '.assets[].name')"
+          for file in dist/artifacts/*.zip; do
+            name="$(basename "$file")"
+            if printf '%s\n' "$existing" | grep -qxF "$name"; then
+              continue
+            fi
+            echo "Загружаю $name"
+            gh release upload "$RELEASE_TAG" "$file"
+          done
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Итоги
+        run: |
+          {
+            echo "### Зеркало обновлено"
+            echo
+            echo "URL для Decky: \`$PAGES_BASE/plugins\`"
+            echo
+            echo "Запасной URL: \`$PAGES_BASE/plugins-gh\`"
+            echo
+            echo '```json'
+            cat dist/status.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
