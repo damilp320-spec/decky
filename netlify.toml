@@ -1,42 +1,11 @@
-# Прослойка работает на CDN-слое, без серверных функций: запрос за функцией
-# уходит вглубь облака Netlify, и с некоторых сетей туда нет пути (проверено на
-# устройстве: корень сайта открывался, а путь функции висел без ответа).
-# Прокси-правило со статусом 200 и заголовки ниже выполняются на самом edge.
+# Список плагинов отдаёт edge-функция netlify/edge-functions/plugins.ts: только
+# она может ответить на предварительный запрос OPTIONS, без которого Decky не
+# получает список. Обычные функции для этого не годятся — с некоторых сетей
+# запрос за ними висит без ответа.
 
 [build]
   publish = "public"
   command = ""
-
-# Список плагинов: отдаём его с зеркала, добавляя CORS-заголовки.
-[[redirects]]
-  from = "/plugins"
-  to = "https://damilp320-spec.github.io/decky/plugins"
-  status = 200
-  force = true
-
-# Счётчик установок: Decky шлёт POST на <адрес>/<плагин>/versions/<версия>/increment.
-# Считать нечего, но без ответа лоадер пишет ошибку в лог.
-[[redirects]]
-  from = "/plugins/*"
-  to = "/increment.json"
-  status = 200
-  force = true
-
-[[headers]]
-  for = "/plugins"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "*"
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-    Access-Control-Max-Age = "600"
-    Content-Type = "application/json; charset=utf-8"
-
-[[headers]]
-  for = "/increment.json"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "*"
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
 
 # Короткий адрес для страницы проверки: она лежит на GitHub Pages, чтобы
 # запросы к этому сайту шли с другого домена — как из Steam.
