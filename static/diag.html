@@ -3,35 +3,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Проверка зеркала Decky</title>
 <style>
-  body{font:17px/1.5 system-ui,sans-serif;max-width:46rem;margin:1.5rem auto;padding:0 1rem;background:#12151c;color:#e8ecf3}
-  h1{font-size:1.4rem}
-  .t{border:2px solid #39405280;border-radius:.6rem;padding:.8rem 1rem;margin:.8rem 0}
-  .t h2{font-size:1rem;margin:0 0 .3rem;font-weight:600;color:#9aa6bd}
-  .v{font-size:1.25rem;font-weight:700}
+  body{font:17px/1.5 system-ui,sans-serif;max-width:46rem;margin:1.2rem auto;padding:0 1rem;background:#12151c;color:#e8ecf3}
+  h1{font-size:1.35rem;margin:0 0 .2rem} h2{font-size:1.05rem;color:#9aa6bd;margin:1.4rem 0 .4rem}
+  p{color:#9aa6bd;margin:.3rem 0 .6rem}
+  .t{border:2px solid #39405280;border-radius:.6rem;padding:.6rem .9rem;margin:.5rem 0}
+  .t .n{font-size:.95rem;color:#9aa6bd;margin-bottom:.2rem}
+  .v{font-size:1.2rem;font-weight:700}
   .ok{color:#5ddb8f} .bad{color:#ff7b72} .wait{color:#e3b341}
-  .d{font-size:.85rem;color:#9aa6bd;word-break:break-all;margin-top:.3rem}
+  .d{font-size:.8rem;color:#7d8798;word-break:break-all;margin-top:.2rem}
 </style></head><body>
 <h1>Проверка зеркала Decky</h1>
-<p>Страница сама делает те же запросы, что и Decky. Дождись, пока все строки перестанут быть жёлтыми.</p>
-<div id="out"></div>
+<p>Все строки становятся зелёными или красными не дольше чем за 12 секунд.</p>
+
+<h2>Что умеет этот Steam Deck</h2>
+<div id="main"></div>
+
+<h2>Какие площадки отвечают</h2>
+<p>Проверка только сетевой доступности домена.</p>
+<div id="hosts"></div>
+
 <script>
-const TESTS = [
-  { id: 'netlify-hdr', name: 'Список через Netlify (как делает Decky)',
-    url: 'https://decky-plug.netlify.app/plugins?sort_by=name&sort_direction=asc', header: true },
-  { id: 'netlify-plain', name: 'Список через Netlify без заголовка',
-    url: 'https://decky-plug.netlify.app/plugins', header: false },
-  { id: 'pages-hdr', name: 'Список напрямую с GitHub Pages (ожидаемо не пройдёт)',
-    url: 'https://damilp320-spec.github.io/decky/plugins', header: true },
-  { id: 'zip', name: 'Скачивание архива плагина',
+const MAIN = [
+  { id: 'cors-ref', name: 'Межсайтовый запрос с заголовком X-Decky-Version (эталон, httpbin.org)',
+    url: 'https://httpbin.org/get', header: true, timeout: 12000 },
+  { id: 'netlify', name: 'Список через Netlify (как делает Decky)',
+    url: 'https://decky-plug.netlify.app/plugins', header: true, timeout: 12000 },
+  { id: 'pages', name: 'Список с GitHub Pages (с этой же страницы, без проверки CORS)',
+    url: 'https://damilp320-spec.github.io/decky/plugins', header: true, timeout: 12000 },
+  { id: 'zip', name: 'Скачивание архива плагина', binary: true,
     url: 'https://damilp320-spec.github.io/decky/artifacts/20308728f974289f4da13733d8abf9d938e4569b3db8586d3467b2aed747b35a.zip',
-    header: false, binary: true },
+    timeout: 12000 },
 ];
 
-const out = document.getElementById('out');
-for (const t of TESTS) {
-  out.insertAdjacentHTML('beforeend',
-    `<div class="t"><h2>${t.name}</h2><div class="v wait" id="v-${t.id}">проверяю…</div><div class="d" id="d-${t.id}"></div></div>`);
+const HOSTS = [
+  { id: 'h-netlify', name: 'netlify.app', url: 'https://decky-plug.netlify.app/' },
+  { id: 'h-deno', name: 'deno.dev', url: 'https://hello.deno.dev' },
+  { id: 'h-vercel', name: 'vercel.app', url: 'https://nextjs-blog-starter.vercel.app' },
+  { id: 'h-hf', name: 'hf.space (Hugging Face)', url: 'https://gradio-hello-world.hf.space' },
+  { id: 'h-httpbin', name: 'httpbin.org', url: 'https://httpbin.org/get' },
+];
+
+function card(parent, item) {
+  document.getElementById(parent).insertAdjacentHTML('beforeend',
+    `<div class="t"><div class="n">${item.name}</div><div class="v wait" id="v-${item.id}">проверяю…</div><div class="d" id="d-${item.id}"></div></div>`);
 }
+MAIN.forEach(t => card('main', t));
+HOSTS.forEach(h => card('hosts', h));
 
 function show(id, cls, value, detail) {
   const v = document.getElementById('v-' + id);
@@ -40,25 +57,44 @@ function show(id, cls, value, detail) {
   document.getElementById('d-' + id).textContent = detail || '';
 }
 
-for (const t of TESTS) {
+function fetchWithTimeout(url, options, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+for (const t of MAIN) {
   (async () => {
     const started = Date.now();
     try {
-      const res = await fetch(t.url, { headers: t.header ? { 'X-Decky-Version': '3.2.8' } : {} });
+      const res = await fetchWithTimeout(t.url, { headers: t.header ? { 'X-Decky-Version': '3.2.8' } : {} }, t.timeout);
       const ms = Date.now() - started;
-      if (!res.ok) {
-        show(t.id, 'bad', 'ОШИБКА ' + res.status, `${ms} мс · ${t.url}`);
-        return;
-      }
+      if (!res.ok) return show(t.id, 'bad', 'ОШИБКА ' + res.status, ms + ' мс');
       if (t.binary) {
         const buf = await res.arrayBuffer();
-        show(t.id, 'ok', 'OK — скачано ' + buf.byteLength + ' байт', `${ms} мс`);
-        return;
+        return show(t.id, 'ok', 'OK — ' + buf.byteLength + ' байт', ms + ' мс');
       }
-      const data = await res.json();
-      show(t.id, 'ok', 'OK — плагинов: ' + data.length, `${ms} мс`);
+      const text = await res.text();
+      let extra = text.length + ' символов';
+      try { const data = JSON.parse(text); if (Array.isArray(data)) extra = 'плагинов: ' + data.length; } catch (e) {}
+      show(t.id, 'ok', 'OK — ' + extra, ms + ' мс');
     } catch (error) {
-      show(t.id, 'bad', 'НЕ ПРОШЁЛ', `${Date.now() - started} мс · ${error} · ${t.url}`);
+      const ms = Date.now() - started;
+      const reason = error.name === 'AbortError' ? 'ТАЙМАУТ — ответа нет' : 'НЕ ПРОШЁЛ';
+      show(t.id, 'bad', reason, `${ms} мс · ${error.name}: ${error.message}`);
+    }
+  })();
+}
+
+for (const h of HOSTS) {
+  (async () => {
+    const started = Date.now();
+    try {
+      await fetchWithTimeout(h.url, { mode: 'no-cors' }, 10000);
+      show(h.id, 'ok', 'отвечает', Date.now() - started + ' мс');
+    } catch (error) {
+      const ms = Date.now() - started;
+      show(h.id, 'bad', error.name === 'AbortError' ? 'молчит' : 'недоступен', `${ms} мс · ${error.name}`);
     }
   })();
 }
