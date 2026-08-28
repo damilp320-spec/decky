@@ -21,6 +21,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from re import sub
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -243,12 +244,40 @@ def main() -> int:
             if item.is_file():
                 shutil.copyfile(item, DIST / item.name)
 
+    write_shortcuts(mirrored_plugins, ok)
+
     print(
         f"Готово: {len(pages_json)} плагинов, {len(on_pages)} архивов, "
         f"{total_bytes / 1e6:.1f} МБ, ошибок: {len(failed)}"
     )
     # Падаем, только если зеркало получилось пустым — единичные сбои не страшны.
     return 1 if not pages_json else 0
+
+
+def write_shortcuts(plugins: list[dict[str, Any]], artifacts: dict[str, Path]) -> None:
+    """Копии архивов под короткими именами — чтобы адрес можно было набрать вручную.
+
+    Длинный адрес с хешем на устройстве не наберёшь, а установка через
+    Developer mode → Install Plugin from URL хеш не проверяет, так что копия
+    под коротким именем полностью равноценна.
+    """
+    names_file = Path("static/shortcuts.txt")
+    if not names_file.is_file():
+        return
+    wanted = {line.strip().lower() for line in names_file.read_text(encoding="utf-8").splitlines() if line.strip()}
+    if not wanted:
+        return
+    target_dir = DIST / "p"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for plugin in plugins:
+        if plugin["name"].lower() not in wanted:
+            continue
+        source = artifacts.get(plugin["versions"][0]["hash"])
+        if not source:
+            continue
+        slug = sub(r"[^a-z0-9]+", "", plugin["name"].lower())
+        shutil.copyfile(source, target_dir / f"{slug}.zip")
+        print(f"  короткий адрес: /p/{slug}.zip -> {plugin['name']} {plugin['versions'][0]['name']}")
 
 
 def render_index(status: dict[str, Any], plugins: list[dict[str, Any]]) -> str:
