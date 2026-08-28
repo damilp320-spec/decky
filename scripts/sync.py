@@ -246,10 +246,12 @@ def main() -> int:
 
 def render_index(status: dict[str, Any], plugins: list[dict[str, Any]]) -> str:
     rows = "\n".join(
-        "<tr><td>{name}</td><td>{author}</td><td>{version}</td></tr>".format(
+        '<tr><td>{name}</td><td>{author}</td><td>{version}</td>'
+        '<td><a href="{artifact}">zip</a></td></tr>'.format(
             name=html.escape(p["name"]),
             author=html.escape(p.get("author") or ""),
             version=html.escape(p["versions"][0]["name"]),
+            artifact=html.escape(p["versions"][0]["artifact"]),
         )
         for p in plugins
     )
@@ -297,7 +299,9 @@ def render_index(status: dict[str, Any], plugins: list[dict[str, Any]]) -> str:
 {failed_html}
 {notes_html}
 <h2>Плагины</h2>
-<table><thead><tr><th>Название</th><th>Автор</th><th>Версия</th></tr></thead>
+<p>Если магазин почему-то не грузится, плагин можно поставить вручную: скопируй
+ссылку на zip и вставь в Decky → Settings → Developer mode → Install Plugin from URL.</p>
+<table><thead><tr><th>Название</th><th>Автор</th><th>Версия</th><th>Архив</th></tr></thead>
 <tbody>
 {rows}
 </tbody></table>

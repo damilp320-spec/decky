@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/plugins", "destination": "/api/plugins" },
+    { "source": "/plugins/:path*", "destination": "/api/increment" }
+  ]
+}
