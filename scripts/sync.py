@@ -236,6 +236,13 @@ def main() -> int:
     )
     (DIST / "index.html").write_text(render_index(status, pages_json), encoding="utf-8")
 
+    # Статические страницы репозитория (диагностика и прочее) кладём как есть.
+    static_dir = Path("static")
+    if static_dir.is_dir():
+        for item in static_dir.iterdir():
+            if item.is_file():
+                shutil.copyfile(item, DIST / item.name)
+
     print(
         f"Готово: {len(pages_json)} плагинов, {len(on_pages)} архивов, "
         f"{total_bytes / 1e6:.1f} МБ, ошибок: {len(failed)}"
