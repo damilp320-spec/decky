@@ -2,3 +2,11 @@
   publish = "public"
   functions = "netlify/functions"
   command = ""
+
+# Короткий адрес для страницы проверки: она лежит на GitHub Pages, чтобы
+# запросы к этому сайту шли с другого домена — как из Steam.
+[[redirects]]
+  from = "/d"
+  to = "https://damilp320-spec.github.io/decky/diag.html"
+  status = 302
+  force = true

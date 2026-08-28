@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка зеркала Decky</title>
+<style>
+  body{font:17px/1.5 system-ui,sans-serif;max-width:46rem;margin:1.5rem auto;padding:0 1rem;background:#12151c;color:#e8ecf3}
+  h1{font-size:1.4rem}
+  .t{border:2px solid #39405280;border-radius:.6rem;padding:.8rem 1rem;margin:.8rem 0}
+  .t h2{font-size:1rem;margin:0 0 .3rem;font-weight:600;color:#9aa6bd}
+  .v{font-size:1.25rem;font-weight:700}
+  .ok{color:#5ddb8f} .bad{color:#ff7b72} .wait{color:#e3b341}
+  .d{font-size:.85rem;color:#9aa6bd;word-break:break-all;margin-top:.3rem}
+</style></head><body>
+<h1>Проверка зеркала Decky</h1>
+<p>Страница сама делает те же запросы, что и Decky. Дождись, пока все строки перестанут быть жёлтыми.</p>
+<div id="out"></div>
+<script>
+const TESTS = [
+  { id: 'netlify-hdr', name: 'Список через Netlify (как делает Decky)',
+    url: 'https://decky-plug.netlify.app/plugins?sort_by=name&sort_direction=asc', header: true },
+  { id: 'netlify-plain', name: 'Список через Netlify без заголовка',
+    url: 'https://decky-plug.netlify.app/plugins', header: false },
+  { id: 'pages-hdr', name: 'Список напрямую с GitHub Pages (ожидаемо не пройдёт)',
+    url: 'https://damilp320-spec.github.io/decky/plugins', header: true },
+  { id: 'zip', name: 'Скачивание архива плагина',
+    url: 'https://damilp320-spec.github.io/decky/artifacts/20308728f974289f4da13733d8abf9d938e4569b3db8586d3467b2aed747b35a.zip',
+    header: false, binary: true },
+];
+
+const out = document.getElementById('out');
+for (const t of TESTS) {
+  out.insertAdjacentHTML('beforeend',
+    `<div class="t"><h2>${t.name}</h2><div class="v wait" id="v-${t.id}">проверяю…</div><div class="d" id="d-${t.id}"></div></div>`);
+}
+
+function show(id, cls, value, detail) {
+  const v = document.getElementById('v-' + id);
+  v.className = 'v ' + cls;
+  v.textContent = value;
+  document.getElementById('d-' + id).textContent = detail || '';
+}
+
+for (const t of TESTS) {
+  (async () => {
+    const started = Date.now();
+    try {
+      const res = await fetch(t.url, { headers: t.header ? { 'X-Decky-Version': '3.2.8' } : {} });
+      const ms = Date.now() - started;
+      if (!res.ok) {
+        show(t.id, 'bad', 'ОШИБКА ' + res.status, `${ms} мс · ${t.url}`);
+        return;
+      }
+      if (t.binary) {
+        const buf = await res.arrayBuffer();
+        show(t.id, 'ok', 'OK — скачано ' + buf.byteLength + ' байт', `${ms} мс`);
+        return;
+      }
+      const data = await res.json();
+      show(t.id, 'ok', 'OK — плагинов: ' + data.length, `${ms} мс`);
+    } catch (error) {
+      show(t.id, 'bad', 'НЕ ПРОШЁЛ', `${Date.now() - started} мс · ${error} · ${t.url}`);
+    }
+  })();
+}
+</script>
+</body></html>
